@@ -18,6 +18,7 @@ gate, and the gate's rules are not part of the agent's prompt.
 
 import json
 import os
+import urllib.error
 import urllib.request
 
 from scenario import ALL_FIELDS, FIELD_LABELS
@@ -59,7 +60,7 @@ MOCK_RESPONSES = {
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434")
 GEMMA_MODEL = os.environ.get("GEMMA_MODEL", "gemma3:1b")
 GOOGLE_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
-GOOGLE_GEMMA_MODEL = os.environ.get("GOOGLE_GEMMA_MODEL", "gemma-3-27b-it")
+GOOGLE_GEMMA_MODEL = os.environ.get("GOOGLE_GEMMA_MODEL", "gemma-4-26b-a4b-it")
 GEMMA_TIMEOUT_SECONDS = 60
 
 # The actions the agent is told it may suggest. This is the agent's own list:
@@ -156,7 +157,7 @@ def google_api_key():
 def gemma_status():
     """Check whether Gemma can be used. Returns (available, message)."""
     if google_api_key():
-        return True, f"{GOOGLE_GEMMA_MODEL} through the Google AI Studio API."
+        return True, f"{google_model_in_use} through the Google AI Studio API."
     try:
         with urllib.request.urlopen(OLLAMA_URL + "/api/tags", timeout=2) as response:
             installed = [model.get("name") for model in json.load(response).get("models", [])]
@@ -175,21 +176,61 @@ def ask_gemma(scenario, risk):
 
 
 def ask_gemma_google(prompt):
-    """Ask Gemma through the Google AI Studio API (works from hosted servers such as Vercel)."""
-    request_body = {
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"temperature": 0, "maxOutputTokens": 300},
-    }
+    """Ask Gemma through the Google AI Studio API (works from hosted servers such as Vercel).
+
+    Google renames Gemma models from time to time. If the chosen model is not
+    found (HTTP 404), ask Google which Gemma models this key can use and retry once.
+    """
+    global google_model_in_use
+    try:
+        return call_google_gemma(google_model_in_use, prompt)
+    except urllib.error.HTTPError as error:
+        if error.code != 404:
+            raise
+    replacement = find_google_gemma_model()
+    if replacement is None:
+        raise ValueError(f"model {google_model_in_use} was not found and no other Gemma model is available for this key")
+    google_model_in_use = replacement
+    return call_google_gemma(google_model_in_use, prompt)
+
+
+# The Google-hosted model currently in use (changes only if the default is not found).
+google_model_in_use = GOOGLE_GEMMA_MODEL
+
+
+def call_google_gemma(model, prompt):
+    """Send one request to the Google AI Studio API and return the answer text."""
+    generation_config = {"temperature": 0, "maxOutputTokens": 1024}
+    if model.startswith("gemma-4"):
+        # Gemma 4 can "think" before answering; turn that off for quick answers.
+        generation_config["thinkingConfig"] = {"thinkingLevel": "minimal"}
+    request_body = {"contents": [{"parts": [{"text": prompt}]}], "generationConfig": generation_config}
     request = urllib.request.Request(
-        f"{GOOGLE_API_BASE}/{GOOGLE_GEMMA_MODEL}:generateContent",
+        f"{GOOGLE_API_BASE}/{model}:generateContent",
         data=json.dumps(request_body).encode("utf-8"),
         # The key goes in a header, not in the URL, so it never appears in error messages.
         headers={"Content-Type": "application/json", "x-goog-api-key": google_api_key()},
     )
     with urllib.request.urlopen(request, timeout=GEMMA_TIMEOUT_SECONDS) as response:
         answer = json.load(response)
-    text = answer["candidates"][0]["content"]["parts"][0]["text"]
+    # Keep only the answer text, not any "thought" parts.
+    parts = answer["candidates"][0]["content"]["parts"]
+    text = "".join(part.get("text", "") for part in parts if not part.get("thought"))
     return remove_code_fence(text)
+
+
+def find_google_gemma_model():
+    """Ask Google which Gemma models this key can use. Returns a model name, or None."""
+    request = urllib.request.Request(f"{GOOGLE_API_BASE}?pageSize=1000", headers={"x-goog-api-key": google_api_key()})
+    with urllib.request.urlopen(request, timeout=10) as response:
+        models = json.load(response).get("models", [])
+    names = [
+        model["name"].replace("models/", "")
+        for model in models
+        if "gemma" in model.get("name", "") and "generateContent" in model.get("supportedGenerationMethods", [])
+    ]
+    newest_first = sorted(names, key=lambda name: "gemma-4" not in name)  # prefer Gemma 4
+    return newest_first[0] if newest_first else None
 
 
 def remove_code_fence(text):

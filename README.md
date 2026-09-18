@@ -172,7 +172,7 @@ Google's hosted Gemma models (Google AI Studio API) instead:
 | Variable | Default | Meaning |
 |---|---|---|
 | `GEMINI_API_KEY` | *(not set)* | Google AI Studio key. When set, Gemma is used through Google's API |
-| `GOOGLE_GEMMA_MODEL` | `gemma-3-27b-it` | Which Google-hosted Gemma model to use |
+| `GOOGLE_GEMMA_MODEL` | `gemma-4-26b-a4b-it` | Which Google-hosted Gemma model to use. If Google no longer offers it, the app picks an available Gemma model automatically |
 | `OLLAMA_URL` | `http://127.0.0.1:11434` | Ollama address, used when no Google key is set |
 | `GEMMA_MODEL` | `gemma3:1b` | Ollama model name |
 
@@ -210,7 +210,7 @@ the plain-language explanations, the full pipeline with fixed test responses (va
 unknown and malformed), safe handling when Gemma is unreachable,
 and the HTTP API.
 
-**Result when last run (18 September 2026):** 52 tests, all passed, on Python 3.9.6, 3.11.14 and 3.14.6
+**Result when last run (18 September 2026):** 54 tests, all passed, on Python 3.9.6, 3.11.14 and 3.14.6
 (macOS). The live Gemma test is skipped automatically when Ollama or the model is not available.
 
 ## Using the interface
@@ -309,7 +309,7 @@ level 0 `LOG_OBSERVATION`, 1 `NOTIFY_OPERATOR`, 2 `ESCALATE_TO_SUPERVISOR`,
 | Fixed test responses (valid, prohibited, unknown, malformed) | Used only by the automated tests; not shown on the page |
 | Gemma agent | The page's only agent source, via a local Ollama server (`gemma3:1b`). Runs on the development machine; proposal quality has **not** been evaluated |
 | Plain-language explanations of each result | Implemented (generated from the matched conditions and gate result) |
-| Automated tests | 52 tests (see above) |
+| Automated tests | 54 tests (see above) |
 | Real sensor or plant data | Not implemented (simulation only) |
 | Trained machine-learning risk model, datasets, evaluation | Not implemented. No accuracy figures exist |
 | Persistent audit log, user accounts, roles | Not implemented |
