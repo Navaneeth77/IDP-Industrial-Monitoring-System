@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Compound Risk Safety Dashboard</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="page">
+
+  <header class="topbar">
+    <h1>AI-Driven Compound Risk Detection and Safety Decision Support System</h1>
+  </header>
+
+  <main class="layout">
+
+    <form id="scenario-form" class="panel" autocomplete="off" novalidate>
+      <h2>Scenario Inputs</h2>
+
+      <div class="field">
+        <label for="preset">Preset</label>
+        <select id="preset"></select>
+      </div>
+
+      <div class="field">
+        <label for="gas_lel">Gas concentration</label>
+        <div class="with-unit">
+          <input id="gas_lel" type="number" min="0" max="100" step="0.1" inputmode="decimal">
+          <span>% LEL</span>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="gas_trend">Gas trend</label>
+        <select id="gas_trend">
+          <option value="rising">Rising</option>
+          <option value="stable">Stable</option>
+          <option value="">Not reported</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="ventilation_pct">Ventilation</label>
+        <div class="with-unit">
+          <input id="ventilation_pct" type="number" min="0" max="100" step="1" inputmode="decimal">
+          <span>%</span>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="fan_status">Fan status</label>
+        <select id="fan_status">
+          <option value="operational">Operational</option>
+          <option value="failed">Failed</option>
+          <option value="">Not reported</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="hot_work_permit">Hot-work permit</label>
+        <select id="hot_work_permit">
+          <option value="open">Open</option>
+          <option value="closed">Closed</option>
+          <option value="">Not reported</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="maintenance_fault">Maintenance fault</label>
+        <select id="maintenance_fault">
+          <option value="present">Present</option>
+          <option value="absent">Absent</option>
+          <option value="">Not reported</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="shift_condition">Shift condition</label>
+        <select id="shift_condition">
+          <option value="normal">Normal</option>
+          <option value="changeover">Changeover</option>
+          <option value="">Not reported</option>
+        </select>
+      </div>
+
+      <div class="buttons">
+        <button id="run-button" type="submit" class="primary">Run Analysis</button>
+        <button id="reset-button" type="button" class="secondary">Reset</button>
+      </div>
+      <p id="gemma-status" class="hint" hidden></p>
+    </form>
+
+    <section class="panel" aria-live="polite">
+      <p id="notice" class="notice" hidden></p>
+      <div id="results">
+        <p class="muted">Set the conditions and press <strong>Run Analysis</strong>.</p>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="footer">
+    Simulated data for an academic demonstration. The system gives advice only and does not control any equipment.
+  </footer>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

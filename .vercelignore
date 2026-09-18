@@ -1,0 +1,8 @@
+# Files Vercel does not need to upload
+tests/
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+.env.*
