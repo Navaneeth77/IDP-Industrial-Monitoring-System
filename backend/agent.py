@@ -2,7 +2,8 @@
 Agent module - produces a PROPOSED action. It never makes the final decision.
 
 The page uses one source:
-  * GEMMA - a local Gemma model run by Ollama on this computer.
+  * GEMMA - through the Google AI Studio API when GEMINI_API_KEY is set (for
+    hosting, e.g. on Vercel), otherwise through Ollama on this computer.
 
 Two further sources are kept only for the automated tests, so that every
 path of the safety check can be tested without a model. They are not shown
@@ -28,7 +29,7 @@ PROPOSAL_SOURCES = {
     "mock_unknown": "Mock agent - fixed example of an unknown action",
     "mock_malformed": "Mock agent - fixed example of malformed output",
     "manual": "Manual test input (written by a test, not produced by an agent)",
-    "gemma": "Gemma - local language model run by Ollama",
+    "gemma": "Gemma language model (Google AI Studio API or local Ollama)",
 }
 
 # Fixed responses of the mock agent. The confidence values are placeholders.
@@ -52,9 +53,13 @@ MOCK_RESPONSES = {
     "mock_malformed": '{"action": "ESCALATE_TO_SUPERVISOR", "reason": "Gas is rising near the hot-wo',
 }
 
-# Local Gemma settings. They can be changed with environment variables.
+# Gemma can be reached in two ways, chosen with environment variables:
+#   1. Google AI Studio API (for hosting, e.g. on Vercel): used when GEMINI_API_KEY is set.
+#   2. Ollama on this computer (for local use): used otherwise.
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434")
 GEMMA_MODEL = os.environ.get("GEMMA_MODEL", "gemma3:1b")
+GOOGLE_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
+GOOGLE_GEMMA_MODEL = os.environ.get("GOOGLE_GEMMA_MODEL", "gemma-3-27b-it")
 GEMMA_TIMEOUT_SECONDS = 60
 
 # The actions the agent is told it may suggest. This is the agent's own list:
@@ -143,16 +148,20 @@ def mock_scenario_proposal(scenario, risk):
     return json.dumps({"action": action, "reason": reason, "confidence": confidence})
 
 
-def gemma_status():
-    """Check whether Ollama is running and the Gemma model is installed.
+def google_api_key():
+    """The Google AI Studio key from the environment ('' if not set). Never stored in code."""
+    return os.environ.get("GEMINI_API_KEY", "").strip()
 
-    Returns (available, message).
-    """
+
+def gemma_status():
+    """Check whether Gemma can be used. Returns (available, message)."""
+    if google_api_key():
+        return True, f"{GOOGLE_GEMMA_MODEL} through the Google AI Studio API."
     try:
         with urllib.request.urlopen(OLLAMA_URL + "/api/tags", timeout=2) as response:
             installed = [model.get("name") for model in json.load(response).get("models", [])]
     except Exception:
-        return False, "Ollama is not running or cannot be reached from the server."
+        return False, "Ollama cannot be reached from the server, and no Google AI Studio key (GEMINI_API_KEY) is set."
     if GEMMA_MODEL not in installed:
         return False, f"Ollama is running, but the model {GEMMA_MODEL} is not installed."
     return True, f"{GEMMA_MODEL} is available through Ollama on this computer."
@@ -160,6 +169,45 @@ def gemma_status():
 
 def ask_gemma(scenario, risk):
     """Send the scenario and the risk result to Gemma and return its raw answer text."""
+    if google_api_key():
+        return ask_gemma_google(build_gemma_prompt(scenario, risk))
+    return ask_gemma_ollama(scenario, risk)
+
+
+def ask_gemma_google(prompt):
+    """Ask Gemma through the Google AI Studio API (works from hosted servers such as Vercel)."""
+    request_body = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {"temperature": 0, "maxOutputTokens": 300},
+    }
+    request = urllib.request.Request(
+        f"{GOOGLE_API_BASE}/{GOOGLE_GEMMA_MODEL}:generateContent",
+        data=json.dumps(request_body).encode("utf-8"),
+        # The key goes in a header, not in the URL, so it never appears in error messages.
+        headers={"Content-Type": "application/json", "x-goog-api-key": google_api_key()},
+    )
+    with urllib.request.urlopen(request, timeout=GEMMA_TIMEOUT_SECONDS) as response:
+        answer = json.load(response)
+    text = answer["candidates"][0]["content"]["parts"][0]["text"]
+    return remove_code_fence(text)
+
+
+def remove_code_fence(text):
+    """Gemma often wraps its JSON in a ```json ... ``` block. Keep only what is inside.
+
+    This only removes the wrapper; the gate still checks the answer strictly.
+    """
+    text = text.strip()
+    if text.startswith("```"):
+        text = text.split("\n", 1)[1] if "\n" in text else ""
+        text = text.strip()
+        if text.endswith("```"):
+            text = text[:-3]
+    return text.strip()
+
+
+def ask_gemma_ollama(scenario, risk):
+    """Ask Gemma through Ollama running on this computer."""
     request_body = {
         "model": GEMMA_MODEL,
         "prompt": build_gemma_prompt(scenario, risk),

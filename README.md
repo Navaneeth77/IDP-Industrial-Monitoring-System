@@ -82,7 +82,7 @@ IDP-Industrial Monitoring System/
 │   ├── pipeline.py        Runs Scenario -> Risk engine -> Agent -> Gate -> Final decision
 │   ├── scenario.py        Zone 4 input fields, the Normal operation preset, input cleaning
 │   ├── risk_engine.py     Rule-based risk engine (rules I1-I10, C1-C7, M1)
-│   ├── agent.py           Gemma agent (via Ollama); fixed test responses for the tests
+│   ├── agent.py           Gemma agent (Google AI Studio API or Ollama); fixed test responses
 │   └── decision_gate.py   Deterministic decision gate (rules G1-G7) and action catalogue
 ├── frontend/
 │   ├── index.html         Page layout
@@ -94,7 +94,8 @@ IDP-Industrial Monitoring System/
 │   ├── test_decision_gate.py  Required test cases 5-10, plus gate independence checks
 │   ├── test_pipeline.py       End-to-end workflow tests (and an optional live Gemma test)
 │   ├── test_server.py         HTTP API tests against a real local server
-│   └── test_vercel_api.py     Tests of the Vercel functions in api/
+│   ├── test_vercel_api.py     Tests of the Vercel functions in api/
+│   └── test_google_gemma.py   Tests of the Google AI Studio path (with a fake local server)
 ├── vercel.json            Vercel settings: serve frontend/, run api/*.py as Python functions
 ├── .vercelignore          Files Vercel does not need to upload
 ├── .gitignore
@@ -160,19 +161,25 @@ Steps:
    (Framework Preset: *Other*). `vercel.json` provides everything else.
 3. Deploy. The page is served at the project URL, and the API at `/api/config` and `/api/analyse`.
 
-**Gemma on Vercel.** Vercel's servers cannot run Ollama, so by default the hosted site has no
-agent proposal: the page shows a short note, the Safety Check rejects the empty proposal, and the
-system applies its own safe default. The risk assessment, safety check and final decision still
-work. To use Gemma from the hosted site, run Ollama on a machine that the internet can reach
-(for example through a secure tunnel) and set these environment variables in the Vercel project
-settings:
+**Gemma on Vercel.** Vercel's servers cannot run Ollama, so the hosted site reaches Gemma through
+Google's hosted Gemma models (Google AI Studio API) instead:
 
-| Variable | Example | Meaning |
+1. Create a free API key at [Google AI Studio](https://aistudio.google.com/apikey).
+2. In the Vercel project, open **Settings → Environment Variables** and add `GEMINI_API_KEY` with
+   your key. Never put the key in the code or commit it to GitHub.
+3. Redeploy (**Deployments → ⋯ → Redeploy**). Environment variables only apply to new deployments.
+
+| Variable | Default | Meaning |
 |---|---|---|
-| `OLLAMA_URL` | `https://your-ollama-host.example` | Address of a reachable Ollama server |
-| `GEMMA_MODEL` | `gemma3:1b` | Model name installed on that server |
+| `GEMINI_API_KEY` | *(not set)* | Google AI Studio key. When set, Gemma is used through Google's API |
+| `GOOGLE_GEMMA_MODEL` | `gemma-3-27b-it` | Which Google-hosted Gemma model to use |
+| `OLLAMA_URL` | `http://127.0.0.1:11434` | Ollama address, used when no Google key is set |
+| `GEMMA_MODEL` | `gemma3:1b` | Ollama model name |
 
-Only expose an Ollama server if you understand the security implications; it has no login of its own.
+Without a key, the hosted page shows "Gemma is not available", the Safety Check rejects the empty
+proposal and the system applies its own safe default. The risk assessment still works.
+Gemma sometimes wraps its answer in a Markdown code block. The agent removes only that wrapper;
+the Safety Check still checks the answer strictly.
 
 ## Running the tests
 
@@ -203,7 +210,7 @@ the plain-language explanations, the full pipeline with fixed test responses (va
 unknown and malformed), safe handling when Gemma is unreachable,
 and the HTTP API.
 
-**Result when last run (18 September 2026):** 48 tests, all passed, on Python 3.9.6, 3.11.14 and 3.14.6
+**Result when last run (18 September 2026):** 52 tests, all passed, on Python 3.9.6, 3.11.14 and 3.14.6
 (macOS). The live Gemma test is skipped automatically when Ollama or the model is not available.
 
 ## Using the interface
@@ -302,7 +309,7 @@ level 0 `LOG_OBSERVATION`, 1 `NOTIFY_OPERATOR`, 2 `ESCALATE_TO_SUPERVISOR`,
 | Fixed test responses (valid, prohibited, unknown, malformed) | Used only by the automated tests; not shown on the page |
 | Gemma agent | The page's only agent source, via a local Ollama server (`gemma3:1b`). Runs on the development machine; proposal quality has **not** been evaluated |
 | Plain-language explanations of each result | Implemented (generated from the matched conditions and gate result) |
-| Automated tests | 48 tests (see above) |
+| Automated tests | 52 tests (see above) |
 | Real sensor or plant data | Not implemented (simulation only) |
 | Trained machine-learning risk model, datasets, evaluation | Not implemented. No accuracy figures exist |
 | Persistent audit log, user accounts, roles | Not implemented |
