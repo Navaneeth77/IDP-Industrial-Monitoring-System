@@ -9,7 +9,7 @@ called **Zone 4**.
 > safety rules. The system only gives advice and never connects to, or sends commands to,
 > real equipment.
 
----
+-------
 
 ## What the prototype does
 
